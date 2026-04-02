@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Eco Chatbot</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <!-- Toggle Switch -->
+  <div class="toggle-container">
+    <label class="switch">
+      <input type="checkbox" id="themeToggle">
+      <span class="slider round"></span>
+    </label>
+    <span id="theme-label">☀️ Light Mode</span>
+  </div>
+
+  <!-- Left side: Search History -->
+  <div class="side-panel left-panel">
+    <h3>🔍 Search History</h3>
+    <ul id="search-history"></ul>
+    <button onclick="exportChat()">📄 Export Chat</button>
+  </div>
+
+  <!-- Chat Container -->
+  <div class="chat-container">
+    <h1>🌍 Environmental News Chatbot 🌿</h1>
+    <div class="chat-box" id="chat-box"></div>
+    <div class="input-container">
+      <input type="text" id="user-input" placeholder="Type your question..." />
+      <button onclick="sendMessage()" class="send-button">Send</button>
+      <button onclick="startVoice()" class="voice-button">🎤</button>
+      <label for="imageUpload" class="image-upload-btn">+</label>
+      <input type="file" id="imageUpload" accept="image/*" onchange="uploadImage()" style="display:none;" />
+    </div>
+  </div>
+
+  <!-- Right side: Suggested Questions -->
+  <div class="side-panel right-panel">
+    <h3>💡 Suggested Questions</h3>
+    <button onclick="sendMessage('What are renewable energy sources?')">Renewables</button>
+    <button onclick="sendMessage('Give me environmental news for USA')">USA News</button>
+    <button onclick="sendMessage('Tell me about deforestation')">Deforestation</button>
+    <button onclick="sendMessage('What is global warming?')">Global Warming</button>
+    <button onclick="sendMessage('Tell me about climate change')">Climate Change</button>
+    <button onclick="sendMessage('Explain air pollution')">Air Pollution</button>
+    <button onclick="sendMessage('How does plastic affect oceans?')">Plastic in Oceans</button>
+    <button onclick="sendMessage('Explain the greenhouse effect')">Greenhouse Effect</button>
+    <button onclick="sendMessage('Explain the population')">Population</button>
+    <button onclick="sendMessage('Explain the Water effect')">Water</button>
+    <button onclick="sendMessage('Explain the land pollution')">Land Pollution</button>
+  </div>
+
+  <!-- Animated Background -->
+  <div class="background-animation"></div>
+
+  <script>
+    const historyList = document.getElementById("search-history");
+
+    function appendMessage(content, sender) {
+      const chatBox = document.getElementById("chat-box");
+      const msg = document.createElement("div");
+      msg.className = sender === "user" ? "user-message" : "bot-message";
+      msg.innerHTML = `
+        <div class="message-avatar">${sender === 'user' ? '👤' : '🤖'}</div>
+        <div class="message-text">${content}</div>
+      `;
+      chatBox.appendChild(msg);
+      chatBox.scrollTop = chatBox.scrollHeight;
+      if (sender === "user") updateHistory(content.replace("You: ", ""));
+    }
+
+    function sendMessage(text = null) {
+      const inputField = document.getElementById("user-input");
+      const message = text || inputField.value;
+      if (!message) return;
+      appendMessage("You: " + message, "user");
+      inputField.value = "";
+      fetch("/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message })
+      })
+      .then(response => response.json())
+      .then(data => {
+        showTyping(() => {
+          appendMessage("Bot: " + data.response, "bot");
+          speakText(data.response);
+        });
+      });
+    }
+
+    function startVoice() {
+      const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+      recognition.lang = "en-US";
+      recognition.start();
+      recognition.onresult = function(event) {
+        const voiceText = event.results[0][0].transcript;
+        document.getElementById("user-input").value = voiceText;
+        sendMessage(voiceText);
+      };
+    }
+
+    function speakText(text) {
+      const synth = window.speechSynthesis;
+      const shortened = text.split(".").slice(0, 2).join(".") + ".";
+      const utter = new SpeechSynthesisUtterance(shortened);
+      utter.lang = "en-US";
+      synth.speak(utter);
+    }
+
+    function uploadImage() {
+      const file = document.getElementById("imageUpload").files[0];
+      if (!file) return;
+      const formData = new FormData();
+      formData.append("image", file);
+      fetch("/upload", {
+        method: "POST",
+        body: formData
+      })
+      .then(res => res.json())
+      .then(data => {
+        appendMessage("🖼️ AI analyzed the image and says: " + data.response, "bot");
+        speakText(data.response);
+      });
+    }
+
+    function updateHistory(text) {
+      const item = document.createElement("li");
+      item.textContent = text;
+      historyList.prepend(item);
+      if (historyList.children.length > 10) {
+        historyList.removeChild(historyList.lastChild);
+      }
+    }
+
+    function exportChat() {
+      let content = "";
+      document.querySelectorAll(".message-text").forEach(el => {
+        content += el.textContent + "\n";
+      });
+      const blob = new Blob([content], { type: "text/plain" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "chat_history.txt";
+      a.click();
+    }
+
+    function showTyping(callback) {
+      const chatBox = document.getElementById("chat-box");
+      const typing = document.createElement("div");
+      typing.className = "bot-message typing";
+      typing.innerHTML = `<div class="message-avatar">🤖</div><div class="message-text">Bot is typing...</div>`;
+      chatBox.appendChild(typing);
+      setTimeout(() => {
+        typing.remove();
+        callback();
+      }, 1500);
+    }
+
+    document.getElementById("themeToggle").addEventListener("change", function () {
+      document.body.classList.toggle("dark-mode");
+      document.getElementById("theme-label").innerText = this.checked ? "🌙 Dark Mode" : "☀️ Light Mode";
+    });
+  </script>
+</body>
+</html>
